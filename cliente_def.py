@@ -1,60 +1,56 @@
 import sqlite3
 from datetime import datetime
 
-# Conectar ao banco de dados
-def conectar():
-    return sqlite3.connect('cliente.db')
+# Conectar ao banco de dados 'cliente.db' e criar um cursor para executar comandos SQL
+conn = sqlite3.connect('cliente.db')
+cursor = conn.cursor()
 
-# Função para criar a tabela (se não existir)
-def criar_tabela():
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute(''' 
-        CREATE TABLE IF NOT EXISTS mercadoria (
-            cpf TEXT PRIMARY KEY NOT NULL,
-            nome TEXT NOT NULL,
-            data_nascimento TEXT NOT NULL,
-            data_compra TEXT NOT NULL,
-            categoria TEXT NOT NULL,
-            serie TEXT NOT NULL,
-            tipo TEXT NOT NULL,
-            marca TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            valor_unitario REAL NOT NULL,
-            valor_total REAL NOT NULL
-        )
-    ''')
-    conexao.commit()
-    conexao.close()
+# Criar a tabela 'mercadoria' se ela não existir
+cursor.execute(''' 
+    CREATE TABLE IF NOT EXISTS mercadoria (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cpf VARCHAR(14) NOT NULL,
+        nome VARCHAR(50) NOT NULL,
+        data_nascimento DATE NOT NULL,
+        data_compra DATE NOT NULL,
+        serie TEXT NOT NULL,
+        tipo VARCHAR(30) NOT NULL,
+        marca VARCHAR(30) NOT NULL,
+        modelo VARCHAR(30) NOT NULL,
+        quantidade INTEGER NOT NULL,
+        valor_unitario REAL NOT NULL,
+        valor_total REAL NOT NULL
+    )
+''')
+conn.commit()
 
-# Função para cadastrar um produto
-def cadastrar_produto(cpf, nome, categoria, serie, tipo, marca, quantidade, valor_unitario, data_compra=None, data_nascimento=None):
-    # Verificar se todos os campos obrigatórios foram preenchidos
-    if not cpf or not nome or not categoria or quantidade is None or valor_unitario is None or not data_nascimento or not serie or not tipo or not marca:
-        print("Erro: Todos os campos (CPF, Nome, Data de Nascimento, Categoria, Quantidade, Valor Unitário, Série, Tipo, Marca) são obrigatórios.")
+
+# Função: cadastrar_produto
+# Descrição: Cadastra um novo produto na tabela 'mercadoria'. Verifica se todos os campos obrigatórios
+# estão preenchidos, se os valores informados (quantidade e valor_unitário) são positivos e realiza
+# o cálculo do valor_total antes de inserir no banco de dados.
+def cadastrar_produto(cpf, nome, serie, tipo, marca, modelo, quantidade, valor_unitario, data_compra=None, data_nascimento=None):
+    if not all([cpf, nome, data_nascimento, serie, tipo, marca, modelo, quantidade, valor_unitario]):
+        print("Erro: Todos os campos são obrigatórios.")
         return "Erro: Dados obrigatórios não preenchidos."
 
-    # Verificar se a quantidade e o valor unitário são válidos
     if quantidade <= 0 or valor_unitario <= 0:
         print("Erro: A quantidade e o valor unitário devem ser positivos.")
         return "Erro: Quantidade ou valor unitário inválido."
 
-    conexao = conectar()
-    cursor = conexao.cursor()
-
-    # Se não fornecer a data de compra, usa a data atual
+    # Se data_compra não for informada, utiliza a data/hora atual no formato DD-MM-YYYY HH:MM:SS
     if not data_compra:
-        data_compra = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        data_compra = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-    # Calcular o valor total da compra
-    valor_total = valor_unitario * quantidade  # Valor total da compra
+    # Calcula o valor total da compra
+    valor_total = valor_unitario * quantidade
 
     try:
         cursor.execute(''' 
-            INSERT INTO mercadoria (cpf, nome, data_nascimento, data_compra, categoria, serie, tipo, marca, quantidade, valor_unitario, valor_total)
+            INSERT INTO mercadoria (cpf, nome, data_nascimento, data_compra, serie, tipo, marca, modelo, quantidade, valor_unitario, valor_total)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (cpf, nome, data_nascimento, data_compra, categoria, serie, tipo, marca, quantidade, valor_unitario, valor_total))
-        conexao.commit()
+        ''', (cpf, nome, data_nascimento, data_compra, serie, tipo, marca, modelo, quantidade, valor_unitario, valor_total))
+        conn.commit()
         print("Produto cadastrado com sucesso!")
         return "Produto cadastrado com sucesso!"
     except sqlite3.IntegrityError:
@@ -63,31 +59,27 @@ def cadastrar_produto(cpf, nome, categoria, serie, tipo, marca, quantidade, valo
     except Exception as e:
         print(f"Erro inesperado: {e}")
         return f"Erro inesperado: {e}"
-    finally:
-        conexao.close()
 
-# Função para listar todos os produtos
+
+# Função: listar_produtos_cliente
+# Descrição: Consulta e imprime todos os registros da tabela 'mercadoria'. Caso nenhum produto seja encontrado,
+# informa que nenhum produto foi encontrado.
 def listar_produtos_cliente():
-    conexao = conectar()
-    cursor = conexao.cursor()
     cursor.execute("SELECT * FROM mercadoria")
     produtos = cursor.fetchall()
-    conexao.close()
-
     if produtos:
         for produto in produtos:
             print(produto)
     else:
         print("Nenhum produto encontrado.")
 
-# Função para buscar um produto pelo CPF
+
+# Função: buscar_produto
+# Descrição: Busca um produto específico na tabela 'mercadoria' com base no CPF informado.
+# Caso o produto seja encontrado, ele é impresso e retornado; caso contrário, é exibida uma mensagem de erro.
 def buscar_produto(cpf):
-    conexao = conectar()
-    cursor = conexao.cursor()
     cursor.execute("SELECT * FROM mercadoria WHERE cpf = ?", (cpf,))
     produto = cursor.fetchone()
-    conexao.close()
-
     if produto:
         print(produto)
         return produto
@@ -95,62 +87,52 @@ def buscar_produto(cpf):
         print("Produto não encontrado.")
         return "Produto não encontrado."
 
-# Função para atualizar um produto pelo CPF
-def atualizar_produto(cpf, nome=None, data_nascimento=None, categoria=None, serie=None, tipo=None, marca=None, quantidade=None, valor_unitario=None, data_compra=None):
-    conexao = conectar()
-    cursor = conexao.cursor()
 
-    # Verificar se o produto existe
+# Função: atualizar_produto
+# Descrição: Atualiza os dados de um produto existente na tabela 'mercadoria' com base no CPF.
+# Apenas os campos informados serão atualizados; os demais permanecem com os valores atuais.
+def atualizar_produto(cpf, nome=None, data_nascimento=None, serie=None, tipo=None, marca=None, modelo=None, quantidade=None, valor_unitario=None, data_compra=None):
     cursor.execute("SELECT * FROM mercadoria WHERE cpf = ?", (cpf,))
     produto = cursor.fetchone()
-
     if not produto:
         print("Produto não encontrado.")
-        conexao.close()
         return "Produto não encontrado."
 
-    # Manter valores antigos se não forem fornecidos
-    nome = nome if nome else produto[1]
-    data_nascimento = data_nascimento if data_nascimento else produto[2]
-    data_compra = data_compra if data_compra else produto[3]
-    categoria = categoria if categoria else produto[4]
-    serie = serie if serie else produto[5]
-    tipo = tipo if tipo else produto[6]
-    marca = marca if marca else produto[7]
-    quantidade = quantidade if quantidade else produto[8]
-    valor_unitario = valor_unitario if valor_unitario else produto[9]
+    # Se algum valor não for informado, mantém o valor que já está no registro
+    nome = nome if nome is not None else produto[2]
+    data_nascimento = data_nascimento if data_nascimento is not None else produto[3]
+    data_compra = data_compra if data_compra is not None else produto[4]
+    serie = serie if serie is not None else produto[5]
+    tipo = tipo if tipo is not None else produto[6]
+    marca = marca if marca is not None else produto[7]
+    modelo = modelo if modelo is not None else produto[8]
+    quantidade = quantidade if quantidade is not None else produto[9]
+    valor_unitario = valor_unitario if valor_unitario is not None else produto[10]
 
-    # Calcular o valor total (se a quantidade ou valor_unitario forem atualizados)
+    # Recalcula o valor total com base na quantidade e valor unitário
     valor_total = valor_unitario * quantidade
 
-    # Atualizar produto
     cursor.execute(''' 
         UPDATE mercadoria
-        SET nome = ?, data_nascimento = ?, data_compra = ?, categoria = ?, serie = ?, tipo = ?, marca = ?, quantidade = ?, valor_unitario = ?, valor_total = ?
+        SET nome = ?, data_nascimento = ?, data_compra = ?, serie = ?, tipo = ?, marca = ?, modelo = ?, quantidade = ?, valor_unitario = ?, valor_total = ?
         WHERE cpf = ?
-    ''', (nome, data_nascimento, data_compra, categoria, serie, tipo, marca, quantidade, valor_unitario, valor_total, cpf))
+    ''', (nome, data_nascimento, data_compra, serie, tipo, marca, modelo, quantidade, valor_unitario, valor_total, cpf))
 
-    conexao.commit()
+    conn.commit()
     print("Produto atualizado com sucesso!")
-    conexao.close()
     return "Produto atualizado com sucesso!"
 
-# Função para deletar um produto pelo CPF
-def deletar_produto(cpf):
-    conexao = conectar()
-    cursor = conexao.cursor()
 
+# Função: deletar_produto
+# Descrição: Exclui um produto da tabela 'mercadoria' com base no CPF informado.
+# Verifica se o produto existe antes de tentar a exclusão.
+def deletar_produto(cpf):
     cursor.execute("SELECT * FROM mercadoria WHERE cpf = ?", (cpf,))
     if not cursor.fetchone():
         print("Produto não encontrado.")
-        conexao.close()
         return "Produto não encontrado."
 
     cursor.execute("DELETE FROM mercadoria WHERE cpf = ?", (cpf,))
-    conexao.commit()
+    conn.commit()
     print("Produto excluído com sucesso!")
-    conexao.close()
     return "Produto excluído com sucesso!"
-
-# Criação da tabela ao iniciar o script (caso ainda não exista)
-criar_tabela()
