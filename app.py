@@ -1,6 +1,6 @@
 
 from cliente_def import cadastrar_produto, listar_produtos_cliente, atualizar_produto, deletar_produto
-from estoque_df import produto_existe, adicionar_produto, listar_produtos as listar_estoque, \
+from estoque_def import produto_existe, adicionar_produto, listar_produtos as listar_estoque, \
     atualizar_produto as atualizar_estoque, excluir_produto, consultar_produto_por_serie
 from datetime import datetime
 
